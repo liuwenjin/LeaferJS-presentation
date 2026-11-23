@@ -1,43 +1,141 @@
-# LeaferJS Presentation · 演示文稿 JSON 生成器
+# LeaferJS Presentation
 
-> 把 PPT 大纲、文章、报告、方案或一句主题描述，转换成**可直接被 Reveal.js 渲染**的结构化 JSON。
-> 只输出 JSON，不写 HTML、不写 Markdown、不做解释 —— 让「内容 → 幻灯片」这一步变成可程序化消费的数据。
+**可独立运行的演示文稿 JSON 生成器**
 
+> 把 PPT 大纲、文章、报告、方案或一句主题描述，转换成 **可直接被 Reveal.js 渲染** 的结构化 JSON。
+> 自带任意大模型即可运行；数据与渲染分离，不绑定任何平台。
+
+![BYOM](https://img.shields.io/badge/model-any%20LLM-6f5cff)
 ![Reveal.js](https://img.shields.io/badge/target-Reveal.js-6f5cff)
 ![Chart.js](https://img.shields.io/badge/chart-Chart.js-2ea44f)
 ![Mermaid](https://img.shields.io/badge/diagram-Mermaid-2ea44f)
 
 ---
 
-## 这是什么
+## 简介
 
-本仓库是一套**面向大模型的演示文稿生成提示词**（`appPrompt.md`）及其配套页面。它把模型设定为「演示文稿架构师」，任务是把用户提供的素材转成结构化 JSON，兼顾：
+**LeaferJS Presentation 是一个可独立运行的 AI 工具**，不是某个平台的插件，也不需要登录任何账号。
 
-- **信息准确性**：不编造事实，业务数据优先
-- **演讲叙事逻辑**：封面 → 内容 → 图文混排 → 总结
-- **页面可视化表达**：文字、列表、图表各司其职
-- **图表可直接渲染**：Chart.js 与 Mermaid 都有固定数据结构
+它的全部能力来自一份系统提示词 [`appPrompt.md`](./appPrompt.md)：把这份提示词交给任意支持长输出的 LLM，模型就会把素材变成一份结构化的幻灯片数据（`title` / `presenter` / `slides`），并以严格 JSON 交付。数据可直接被 Reveal.js 或任意前端查看器消费。
 
-与其他三个 LeaferJS 工具不同，这里**不生成 HTML 代码**，只生成幻灯片数据；渲染由 Reveal.js 查看器完成。
+```text
+大纲 / 文章 / 主题 ──► 任意 LLM ──► slides.json ──► Reveal.js / 自建查看器
+                            ▲
+                      appPrompt.md
+```
 
-## 在线体验
+与其他三个 LeaferJS 工具不同，这里**不生成 HTML 代码**，只生成渲染无关的数据层。这带来两个好处：同一份内容可以换任何主题、任何渲染器；模型输出更短、更稳定、更容易校验。
 
-- 平台内体验：<https://transweb.cn/agent.html?id=ec6d0ef4ddfde4d983fdf934e57e29bb>
-- 本仓库的 `appPage.html` 以 `iframe` 嵌入同一在线应用，可直接用浏览器打开。
+## 为什么它可以独立运行
 
-## 核心特性
-
-| 能力 | 说明 |
+| 维度 | 说明 |
 | --- | --- |
-| 纯 JSON 输出 | 只允许一个合法 JSON 对象，可直接 `JSON.parse` |
-| 四种页型 | `title` 封面、`content` 内容页、`split` 图文混排、`summary` 总结 |
-| 三种元素 | `text` 段落、`list` 列表、`chart` 图表 |
-| Chart.js 图表 | 折线、柱状、饼图、雷达、散点，`chartData` 直接对应 Chart.js 配置 |
-| Mermaid 图表 | Flowchart、Sequence、Mindmap、Timeline、Architecture |
-| 自动选型 | 趋势/对比/占比用 Chart.js；流程/架构/时间线用 Mermaid |
-| 内容压缩 | 单段 ≤ 200 字、列表 ≤ 6 项、每项 ≤ 30 字 |
-| 图表配比 | 图表页建议占 20%–40%，不每页都放图 |
-| 唯一 ID | 每个 slide 的 `id` 唯一，便于锚点跳转与增量更新 |
+| **模型自由** | OpenAI、DeepSeek、Claude、Gemini、Ollama、vLLM 均可；只要支持 system prompt 与长输出 |
+| **无平台锁定** | 不调用 transweb.cn 或任何私有接口；平台页面只是同款提示词的参考实现 |
+| **数据与渲染分离** | 输出是标准 JSON，可接 Reveal.js、自建组件或任意前端框架 |
+| **本地执行** | 提示词、调用脚本、产物都在你的机器上；使用本地模型时可完全离线生成 |
+| **结构可校验** | 页型、元素、图表字段都有固定协议，适合做 schema 校验与自动化流水线 |
+| **过程可审计** | 提示词、输出协议和生成结果全部可见，可 diff、可版本化 |
+
+### 独立运行的边界
+
+- **生成层完全独立**：提示词 + LLM + 本地运行器即可产出 JSON。
+- **渲染层需要消费者**：JSON 不会自己变成幻灯片，需要 Reveal.js 查看器或自建前端消费；本仓库只负责数据层。
+- 这不是平台依赖，而是「数据 / 视图」的刻意分离；换一个查看器，内容不用重新生成。
+
+## 它生成什么
+
+一份可直接渲染的演示文稿数据：
+
+- **四种页型**：`title` 封面、`content` 内容页、`split` 图文混排、`summary` 总结
+- **三种元素**：`text` 段落、`list` 列表、`chart` 图表
+- **Chart.js 图表**：折线、柱状、饼图、雷达、散点，`chartData` 直接对应 Chart.js 配置
+- **Mermaid 图表**：Flowchart、Sequence、Mindmap、Timeline、Architecture
+- **自动选型**：趋势/对比/占比用 Chart.js；流程/架构/时间线用 Mermaid
+- **内容压缩**：单段 ≤ 200 字、列表 ≤ 6 项、每项 ≤ 30 字
+- **图表配比**：图表页建议占 20%–40%，不每页都放图
+- **唯一 ID**：每个 slide 的 `id` 唯一，便于锚点跳转与增量更新
+
+## 快速开始（独立运行）
+
+### 前置条件
+
+- Node.js 18+（内置 `fetch`，无需 `npm install`）
+- 一个 OpenAI 兼容的模型端点；建议单次输出上限 **≥ 8K tokens**
+
+### 1. 获取工具
+
+```bash
+git clone https://github.com/liuwenjin/LeaferJS-presentation.git
+cd LeaferJS-presentation
+```
+
+### 2. 创建本地运行器
+
+把下面的代码保存为 `run.mjs`（放在仓库根目录）：
+
+> 不想用 Node.js？任何 HTTP 客户端都可以：把 `appPrompt.md` 作为 system message、需求作为 user message 发送，再解析返回的 JSON。
+
+```js
+// run.mjs — Node.js 18+，零依赖
+import fs from 'node:fs';
+
+const system = fs.readFileSync('appPrompt.md', 'utf8');
+const idea = process.argv.slice(2).join(' ') || '做一个关于「AI 应用工厂」的 8 页汇报，包含 2024–2026 产品路线图和 Agent 工作流。';
+const base = (process.env.LLM_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
+
+const res = await fetch(`${base}/chat/completions`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${process.env.LLM_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: process.env.LLM_MODEL || 'deepseek-chat',
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: idea }
+    ],
+    max_tokens: Number(process.env.LLM_MAX_TOKENS || 8000),
+    temperature: 0.7
+  })
+});
+
+if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+const body = await res.json();
+if (body.choices?.[0]?.finish_reason === 'length') {
+  throw new Error('输出被截断：请提高 LLM_MAX_TOKENS，或换用输出上限更大的模型');
+}
+
+const raw = body.choices[0].message.content.trim()
+  .replace(/^`{3}(?:json)?\s*/, '')
+  .replace(/\s*`{3}$/, '');
+const deck = JSON.parse(raw);
+fs.writeFileSync('deck.json', JSON.stringify(deck, null, 2), 'utf8');
+console.log(`✓ ${deck.title} → deck.json（${deck.slides.length} 页）`);
+```
+
+> 提示：提示词允许模型在无法生成时返回 `{}`。运行器可再加一条校验：`if (!deck.slides) throw new Error('模型返回空结果，请重试或换模型');`
+
+### 3. 生成并查看
+
+```bash
+LLM_API_KEY=sk-... node run.mjs "做一个关于「AI 应用工厂」的 8 页汇报，包含团队 2024–2026 年的产品路线图和 Agent 工作流"
+```
+
+拿到 `deck.json` 后，可以直接接入你在用的 Reveal.js 查看器，或按下一节的映射自己渲染。
+
+### 4. 换一个模型
+
+| 服务 | `LLM_BASE_URL` | `LLM_MODEL` 示例 |
+| --- | --- | --- |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4.1` |
+| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
+| Ollama（本地） | `http://localhost:11434/v1` | `qwen2.5:14b` |
+| vLLM（本地） | `http://localhost:8000/v1` | 你部署的模型名 |
+| 其他网关 | 任意 OpenAI 兼容地址 | 以服务商文档为准 |
+
+> Claude、Gemini 的原生 API 协议不同，可通过 OpenAI 兼容网关接入，或自行替换运行器中的请求部分。模型不是工具的一部分，可随时替换。
 
 ## 交付协议（硬约束）
 
@@ -153,7 +251,7 @@
 
 ## 渲染约定
 
-该 JSON 是**渲染无关的中间格式**，查看器按以下约定映射到 Reveal.js：
+该 JSON 是**渲染无关的中间格式**。用 Reveal.js 消费时，按以下约定映射：
 
 | JSON | Reveal.js |
 | --- | --- |
@@ -167,46 +265,45 @@
 | `element.chartType: "chartjs"` | `<canvas>` + Chart.js 实例 |
 | `element.chartType: "mermaid"` | Mermaid 容器 + `mermaid.render` |
 
-Reveal.js 负责分页、转场、键盘导航与全屏；Chart.js 与 Mermaid 负责图表渲染。平台端已内置这套查看器，`appCode.vue` 是它的 UI 壳。
-
-## 快速开始
-
-### 1. 准备提示词
-
-将 [`appPrompt.md`](./appPrompt.md) 全文作为**系统提示词**（System Prompt）。它包含角色、JSON 铁律、数据结构、图表规范、编排规则与压缩规则。
-
-### 2. 提供素材
-
-可以直接给主题：
-
-> 做一个关于「AI 应用工厂」的 8 页汇报，包含团队 2024–2026 年的产品路线图和 Agent 工作流。
-
-也可以粘贴大纲、文章或报告。模型会自行决定页型、元素与图表类型，**不会反问**。
-
-### 3. 解析 JSON
+最小消费示例：
 
 ```js
-const deck = JSON.parse(responseText);
-console.log(deck.title, deck.slides.length);
+import fs from 'node:fs';
+
+const deck = JSON.parse(fs.readFileSync('deck.json', 'utf8'));
+for (const slide of deck.slides) {
+  // slide.type: title | content | split | summary  → 决定 section 布局
+  // slide.elements: text | list | chart             → 决定内部渲染
+  console.log(slide.id, slide.type, slide.elements.length);
+}
 ```
 
-### 4. 渲染
+Reveal.js 负责分页、转场、键盘导航与全屏；Chart.js 与 Mermaid 负责图表渲染。你也可以换成自建查看器、Vue/React 组件或服务端出图，数据不需要重新生成。
 
-- 在 transweb.cn 的演示文稿应用中直接查看；
-- 或把 `slides` 映射到你的 Reveal.js / 任意前端渲染器。
+## 技术栈
+
+| 层 | 选型 |
+| --- | --- |
+| 生成引擎 | `appPrompt.md`（系统提示词）+ 任意 LLM |
+| 运行器 | 约 40 行 Node.js 脚本，仅用内置 `fetch` |
+| 输出 | `deck.json`（渲染无关的结构化数据） |
+| 目标渲染器 | Reveal.js + Chart.js + Mermaid |
+| 产物 | 标准 JSON，可 diff、可校验、可进版本库 |
+
+本工具**不包含** Reveal.js 查看器本体，这是数据层工具的刻意边界，不是平台依赖。
 
 ## 目录结构
 
 ```text
 LeaferJS-presentation/
+├── appPrompt.md     # 工具引擎：完整系统提示词（必需）
 ├── README.md        # 本文件
-├── appPrompt.md     # 完整提示词（协议、图表规范、编排规则）
-├── appCode.vue      # 平台端 Vue 单文件组件（在线应用的 UI 壳）
-├── appPage.html     # iframe 嵌入页，指向 transweb.cn 在线应用
-└── manifest.json    # 应用元数据与来源
+├── appCode.vue      # 可选参考实现：平台端 UI（独立运行不需要）
+├── appPage.html     # 可选参考实现：iframe 嵌入页
+└── manifest.json    # 元数据
 ```
 
-说明：本工具的输出是 JSON 数据，不包含可直接打开的 HTML；`appCode.vue` 是平台侧交互界面，不负责渲染幻灯片。
+`run.mjs` 不在仓库内，按「快速开始」创建即可；`appCode.vue` 与 `appPage.html` 只是同款提示词在 transweb.cn 上的 Web 外壳，**不参与**独立运行链路，删掉它们不影响工具使用。
 
 ## 完整示例
 
@@ -295,18 +392,31 @@ LeaferJS-presentation/
 - [ ] 单段 ≤ 200 字、列表 ≤ 6 项、每项 ≤ 30 字
 - [ ] 图表页占比 20%–40%，不是每页都有图
 
-## 已知限制
+## 常见问题
 
-- 本仓库不包含 Reveal.js 查看器，需要平台或自建渲染器消费 JSON。
-- 模型可能输出非法 JSON（尾随逗号、未转义换行），建议在应用侧做解析重试。
-- 业务数据缺失时，提示词允许生成合理模拟数据，正式汇报前需人工核对。
+**为什么不直接生成 PPTX？**
+JSON 更轻、更可控，也更容易换主题和渲染器。需要 PPTX 时，可以在 JSON 之上再加一层转换器，而不必重新生成内容。
+
+**必须联网吗？**
+生成阶段需要访问模型；查看阶段取决于你的渲染器。本地模型 + 本地查看器可完全离线。
+
+**输出被截断怎么办？**
+优先提高 `LLM_MAX_TOKENS`。长文稿可拆成多次生成再合并 `slides`，但要注意 `id` 唯一。
+
+**可以商用吗？**
+本仓库暂未声明许可证。提示词与生成数据的版权归各自作者所有，商用前请自行确认授权范围。
+
+## 参考实现（可选）
+
+- 在线效果参考：<https://transweb.cn/agent.html?id=ec6d0ef4ddfde4d983fdf934e57e29bb>
+- `appPage.html` 通过 iframe 嵌入同一在线版本；它只用于预览，不是运行本工具的必要条件。
 
 ## 相关链接
 
 - Reveal.js：<https://revealjs.com/>
 - Chart.js：<https://www.chartjs.org/>
 - Mermaid：<https://mermaid.js.org/>
-- 在线应用：<https://transweb.cn/agent.html?id=ec6d0ef4ddfde4d983fdf934e57e29bb>
+- 本仓库：<https://github.com/liuwenjin/LeaferJS-presentation>
 
 ## 许可
 
