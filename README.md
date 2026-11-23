@@ -1,51 +1,128 @@
 # LeaferJS Presentation
 
-**可独立运行的演示文稿 JSON 生成器**
+**可独立运行的网页版演示文稿**
 
-> 把 PPT 大纲、文章、报告、方案或一句主题描述，转换成 **可直接被 Reveal.js 渲染** 的结构化 JSON。
-> 自带任意大模型即可运行；数据与渲染分离，不绑定任何平台。
+> 纯前端 + AIGC：把大纲、文章、报告或一句主题描述，生成一份可直接翻页的网页版演示文稿。
+> 仓库包含 AIGC 结构化提示词、前端结果渲染组件与本地网页入口；AI 推理由 transweb.cn 的 serverless 服务提供。
 
-![BYOM](https://img.shields.io/badge/model-any%20LLM-6f5cff)
-![Reveal.js](https://img.shields.io/badge/target-Reveal.js-6f5cff)
-![Chart.js](https://img.shields.io/badge/chart-Chart.js-2ea44f)
-![Mermaid](https://img.shields.io/badge/diagram-Mermaid-2ea44f)
+![Pure Frontend](https://img.shields.io/badge/architecture-pure%20frontend-6f5cff)
+![Vue SFC](https://img.shields.io/badge/component-Vue%20SFC-42b883)
+![Serverless](https://img.shields.io/badge/AI-transweb.cn%20serverless-2ea44f)
+![Reveal.js](https://img.shields.io/badge/render-Reveal.js-6f5cff)
 
 ---
 
-## 简介
+## 项目简介
 
-**LeaferJS Presentation 是一个可独立运行的 AI 工具**，不是某个平台的插件，也不需要登录任何账号。
+LeaferJS Presentation 是一个**可独立运行的网页版演示文稿生成器**，也是一个纯前端项目。
 
-它的全部能力来自一份系统提示词 [`appPrompt.md`](./appPrompt.md)：把这份提示词交给任意支持长输出的 LLM，模型就会把素材变成一份结构化的幻灯片数据（`title` / `presenter` / `slides`），并以严格 JSON 交付。数据可直接被 Reveal.js 或任意前端查看器消费。
+仓库内没有自建后端、没有数据库、没有构建配置，也不需要在本地安装依赖。打开 [`appPage.html`](./appPage.html)，输入主题或粘贴素材，前端会把用户输入与当前应用标识提交给 **transweb.cn 的 serverless 服务**；服务按 AIGC 结构化提示词调用大模型，流式返回演示文稿 JSON，前端组件解析后把结果渲染成可翻页的网页幻灯片。
+
+一句话概括：
 
 ```text
-大纲 / 文章 / 主题 ──► 任意 LLM ──► slides.json ──► Reveal.js / 自建查看器
-                            ▲
-                      appPrompt.md
+本地网页（纯前端） ──► transweb.cn serverless ──► 大模型 ──► 幻灯片 JSON ──► 前端渲染
 ```
 
-与其他三个 LeaferJS 工具不同，这里**不生成 HTML 代码**，只生成渲染无关的数据层。这带来两个好处：同一份内容可以换任何主题、任何渲染器；模型输出更短、更稳定、更容易校验。
+## 项目组成
 
-## 为什么它可以独立运行
+| 组成 | 文件 | 职责 |
+| --- | --- | --- |
+| **AIGC 结构化提示词** | [`appPrompt.md`](./appPrompt.md) | 约束模型的角色、JSON 结构、页型/元素、图表规范与内容压缩规则 |
+| **前端 AI 结果渲染组件** | [`appCode.vue`](./appCode.vue) | Vue 单文件组件：输入向导、流式状态、幻灯片渲染、版本历史、编辑与导出 |
+| **本地浏览器网页** | [`appPage.html`](./appPage.html) | 本地入口页，打开即用；以 iframe 加载 transweb.cn 上的同款应用 |
+| **元数据** | [`manifest.json`](./manifest.json) | 应用来源、创建时间与文件清单 |
+
+## 架构与数据流
+
+```text
+┌────────────────────────── 浏览器（纯前端） ──────────────────────────┐
+│  appPage.html（本地入口）                                            │
+│        │ iframe                                                      │
+│        ▼                                                             │
+│  appCode.vue（Vue SFC）                                              │
+│   ├─ 输入主题 / 大纲 / 文章                                          │
+│   ├─ 提交 context + documentId                                       │
+│   ├─ 接收流式结果、解析 JSON                                         │
+│   └─ 渲染幻灯片 / 版本 / 编辑 / 导出                                 │
+└───────────────┬──────────────────────────────────────────────────────┘
+                │ HTTPS 流式请求
+                ▼
+   transweb.cn serverless（提示词编排 / 模型调用 / 结果存储 / 登录与额度）
+                │
+                ▼
+             大模型 → 幻灯片 JSON
+```
+
+### 提示词与前端的关系
+
+- `appPrompt.md` 是本项目的 **AIGC 结构化提示词**，也是模型输出必须遵守的契约。
+- 在线应用按 `documentId` 绑定平台侧的提示词配置；前端提交的是用户输入（`context`）与应用标识，而不是每次都上传整份提示词。
+- 修改仓库里的 `appPrompt.md` 不会自动改变线上应用；需要在平台更新提示词配置，或把提示词接入你自建的 serverless 服务。
+
+## 为什么是「纯前端 + serverless」
 
 | 维度 | 说明 |
 | --- | --- |
-| **模型自由** | OpenAI、DeepSeek、Claude、Gemini、Ollama、vLLM 均可；只要支持 system prompt 与长输出 |
-| **无平台锁定** | 不调用 transweb.cn 或任何私有接口；平台页面只是同款提示词的参考实现 |
-| **数据与渲染分离** | 输出是标准 JSON，可接 Reveal.js、自建组件或任意前端框架 |
-| **本地执行** | 提示词、调用脚本、产物都在你的机器上；使用本地模型时可完全离线生成 |
-| **结构可校验** | 页型、元素、图表字段都有固定协议，适合做 schema 校验与自动化流水线 |
-| **过程可审计** | 提示词、输出协议和生成结果全部可见，可 diff、可版本化 |
+| **无自建后端** | 仓库只有 HTML、Vue SFC、Markdown 与 JSON，没有服务端代码 |
+| **无需构建** | 没有 `package.json`、打包器或编译步骤；打开网页即可使用 |
+| **前端负责交互与渲染** | 输入、流式状态、JSON 解析、幻灯片渲染、版本与导出都在浏览器完成 |
+| **AI 在 serverless** | 模型调用、流式返回、结果存储由 transweb.cn 承担，前端不持有模型密钥 |
+| **静态可托管** | 入口页可放在任意静态服务器、对象存储或本地目录 |
 
-### 独立运行的边界
+**独立运行的含义**：不依赖本地开发环境、不需要部署自己的后端、不需要安装 npm 包。它不是「离线运行」，生成能力依赖 transweb.cn 的 serverless 服务与网络。
 
-- **生成层完全独立**：提示词 + LLM + 本地运行器即可产出 JSON。
-- **渲染层需要消费者**：JSON 不会自己变成幻灯片，需要 Reveal.js 查看器或自建前端消费；本仓库只负责数据层。
-- 这不是平台依赖，而是「数据 / 视图」的刻意分离；换一个查看器，内容不用重新生成。
+## 运行方式
+
+### 方式一：直接打开（最简单）
+
+双击 [`appPage.html`](./appPage.html)，或在浏览器里打开它。页面会以 iframe 加载 transweb.cn 上的同款应用。
+
+### 方式二：本地静态服务（推荐）
+
+某些浏览器对 `file://` 下的 iframe、剪贴板或跨域行为有限制，建议起一个静态服务：
+
+```bash
+# 在仓库根目录
+python3 -m http.server 8080
+# 打开 http://localhost:8080/appPage.html
+```
+
+或者使用任意静态服务器（Nginx、Caddy、VS Code Live Server 等）。
+
+### 运行前提
+
+- 能访问 `transweb.cn`（AI 生成与结果存储依赖该服务）
+- 现代浏览器（Chrome、Edge、Safari、Firefox）
+- 无需 Node.js、npm、构建工具
+- 登录状态与调用额度以 transweb.cn 当前策略为准
+
+## serverless 依赖说明
+
+| 能力 | 是否在仓库内 | 说明 |
+| --- | --- | --- |
+| 模型调用 | 否 | 由 transweb.cn serverless 调用大模型 |
+| 提示词编排 | 否 | 平台按 `documentId` 绑定 AIGC 提示词 |
+| 流式返回 | 否 | 前端通过 `aigcInterface` 接收流式结果 |
+| 结果存储与版本 | 否 | 历史版本由 transweb.cn 保存 |
+| 输入、解析、渲染、导出 | 是 | `appCode.vue` 在浏览器内完成 |
+
+前端不保存模型 API Key，也不直接连接模型服务；所有生成请求都经过 transweb.cn。服务不可用、未登录或额度不足时，页面会给出对应提示。
+
+## 目录结构
+
+```text
+LeaferJS-presentation/
+├── appPrompt.md     # AIGC 结构化提示词（模型契约）
+├── appCode.vue      # 前端 AI 结果渲染组件（Vue SFC，基于 transweb 前端运行时）
+├── appPage.html     # 本地浏览器入口（iframe 加载在线应用）
+├── manifest.json    # 应用元数据与来源
+└── README.md        # 本文件
+```
 
 ## 它生成什么
 
-一份可直接渲染的演示文稿数据：
+一份可直接放映的网页版演示文稿，而不是一段需要二次排版的内容：
 
 - **四种页型**：`title` 封面、`content` 内容页、`split` 图文混排、`summary` 总结
 - **三种元素**：`text` 段落、`list` 列表、`chart` 图表
@@ -54,90 +131,12 @@
 - **自动选型**：趋势/对比/占比用 Chart.js；流程/架构/时间线用 Mermaid
 - **内容压缩**：单段 ≤ 200 字、列表 ≤ 6 项、每项 ≤ 30 字
 - **图表配比**：图表页建议占 20%–40%，不每页都放图
+- **网页放映**：前端把 JSON 渲染为 Reveal.js 幻灯片，支持翻页与分享链接
 - **唯一 ID**：每个 slide 的 `id` 唯一，便于锚点跳转与增量更新
 
-## 快速开始（独立运行）
+## AIGC 结构化提示词
 
-### 前置条件
-
-- Node.js 18+（内置 `fetch`，无需 `npm install`）
-- 一个 OpenAI 兼容的模型端点；建议单次输出上限 **≥ 8K tokens**
-
-### 1. 获取工具
-
-```bash
-git clone https://github.com/liuwenjin/LeaferJS-presentation.git
-cd LeaferJS-presentation
-```
-
-### 2. 创建本地运行器
-
-把下面的代码保存为 `run.mjs`（放在仓库根目录）：
-
-> 不想用 Node.js？任何 HTTP 客户端都可以：把 `appPrompt.md` 作为 system message、需求作为 user message 发送，再解析返回的 JSON。
-
-```js
-// run.mjs — Node.js 18+，零依赖
-import fs from 'node:fs';
-
-const system = fs.readFileSync('appPrompt.md', 'utf8');
-const idea = process.argv.slice(2).join(' ') || '做一个关于「AI 应用工厂」的 8 页汇报，包含 2024–2026 产品路线图和 Agent 工作流。';
-const base = (process.env.LLM_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
-
-const res = await fetch(`${base}/chat/completions`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${process.env.LLM_API_KEY}`
-  },
-  body: JSON.stringify({
-    model: process.env.LLM_MODEL || 'deepseek-chat',
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: idea }
-    ],
-    max_tokens: Number(process.env.LLM_MAX_TOKENS || 8000),
-    temperature: 0.7
-  })
-});
-
-if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-const body = await res.json();
-if (body.choices?.[0]?.finish_reason === 'length') {
-  throw new Error('输出被截断：请提高 LLM_MAX_TOKENS，或换用输出上限更大的模型');
-}
-
-const raw = body.choices[0].message.content.trim()
-  .replace(/^`{3}(?:json)?\s*/, '')
-  .replace(/\s*`{3}$/, '');
-const deck = JSON.parse(raw);
-fs.writeFileSync('deck.json', JSON.stringify(deck, null, 2), 'utf8');
-console.log(`✓ ${deck.title} → deck.json（${deck.slides.length} 页）`);
-```
-
-> 提示：提示词允许模型在无法生成时返回 `{}`。运行器可再加一条校验：`if (!deck.slides) throw new Error('模型返回空结果，请重试或换模型');`
-
-### 3. 生成并查看
-
-```bash
-LLM_API_KEY=sk-... node run.mjs "做一个关于「AI 应用工厂」的 8 页汇报，包含团队 2024–2026 年的产品路线图和 Agent 工作流"
-```
-
-拿到 `deck.json` 后，可以直接接入你在用的 Reveal.js 查看器，或按下一节的映射自己渲染。
-
-### 4. 换一个模型
-
-| 服务 | `LLM_BASE_URL` | `LLM_MODEL` 示例 |
-| --- | --- | --- |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4.1` |
-| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
-| Ollama（本地） | `http://localhost:11434/v1` | `qwen2.5:14b` |
-| vLLM（本地） | `http://localhost:8000/v1` | 你部署的模型名 |
-| 其他网关 | 任意 OpenAI 兼容地址 | 以服务商文档为准 |
-
-> Claude、Gemini 的原生 API 协议不同，可通过 OpenAI 兼容网关接入，或自行替换运行器中的请求部分。模型不是工具的一部分，可随时替换。
-
-## 交付协议（硬约束）
+[`appPrompt.md`](./appPrompt.md) 把模型设定为「演示文稿架构师」，并强制约束输出。核心协议如下。
 
 ### 顶层结构
 
@@ -162,7 +161,7 @@ LLM_API_KEY=sk-... node run.mjs "做一个关于「AI 应用工厂」的 8 页�
 | `presenter` | `string` | 汇报人 |
 | `slides` | `array` | 幻灯片数组，顺序即播放顺序 |
 
-每个 slide 包含 `id`、`type`、`title`、`elements`。`id` 必须唯一。
+每个 slide 包含 `id`、`type`、`title`、`elements`；`id` 必须唯一。
 
 ### Slide 类型
 
@@ -251,168 +250,98 @@ LLM_API_KEY=sk-... node run.mjs "做一个关于「AI 应用工厂」的 8 页�
 
 ## 渲染约定
 
-该 JSON 是**渲染无关的中间格式**。用 Reveal.js 消费时，按以下约定映射：
+前端结果组件把 JSON 映射为 Reveal.js 幻灯片：
 
-| JSON | Reveal.js |
+| JSON | 渲染结果 |
 | --- | --- |
 | `slides[]` | 每个元素对应一个 `<section>` |
-| `type: "title"` | 封面 section，居中大标题 |
-| `type: "content"` | 标准内容 section，元素纵向排列 |
-| `type: "split"` | 左右两栏 section（文本 + 图表） |
-| `type: "summary"` | 总结 section，列表为主 |
+| `type: "title"` | 封面页，居中大标题 |
+| `type: "content"` | 标准内容页，元素纵向排列 |
+| `type: "split"` | 左右两栏（文本 + 图表） |
+| `type: "summary"` | 总结页，列表为主 |
 | `element.type: "text"` | 段落 |
 | `element.type: "list"` | 无序列表 |
 | `element.chartType: "chartjs"` | `<canvas>` + Chart.js 实例 |
 | `element.chartType: "mermaid"` | Mermaid 容器 + `mermaid.render` |
 
-最小消费示例：
+Reveal.js 负责分页、转场、键盘导航与全屏；Chart.js 与 Mermaid 负责图表渲染。
 
-```js
-import fs from 'node:fs';
+## 前端渲染组件
 
-const deck = JSON.parse(fs.readFileSync('deck.json', 'utf8'));
-for (const slide of deck.slides) {
-  // slide.type: title | content | split | summary  → 决定 section 布局
-  // slide.elements: text | list | chart             → 决定内部渲染
-  console.log(slide.id, slide.type, slide.elements.length);
-}
-```
+[`appCode.vue`](./appCode.vue) 是平台运行时下的 Vue 单文件组件，负责从输入到成品的完整前端链路：
 
-Reveal.js 负责分页、转场、键盘导航与全屏；Chart.js 与 Mermaid 负责图表渲染。你也可以换成自建查看器、Vue/React 组件或服务端出图，数据不需要重新生成。
+- **输入**：主题、PPT 大纲、文章、报告、方案，`solo` 模式与嵌入模式自适应
+- **生成**：调用 `aigcInterface.streamRequest` 发起流式请求，展示加载进度与阶段提示，支持中止
+- **解析**：用 `WebTool.extractJSON` 提取 JSON，格式异常时提示并允许重试
+- **渲染**：把 `slides` 交给结果面板渲染为 Reveal.js 网页幻灯片，支持翻页与错误面板
+- **版本**：历史版本列表、版本对比、切换与恢复
+- **编辑**：基于当前内容继续修改，生成新版本
+- **导出**：存档 HTML、下载 Markdown / 图片、复制分享链接
+- **反馈**：内置问题反馈入口
+
+> 组件依赖 transweb 前端运行时与 serverless 接口，不是可以直接 `import` 到任意 Vue 工程的 npm 包；它的价值在于展示 AIGC 结果如何被解析、渲染和管理。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
-| 生成引擎 | `appPrompt.md`（系统提示词）+ 任意 LLM |
-| 运行器 | 约 40 行 Node.js 脚本，仅用内置 `fetch` |
-| 输出 | `deck.json`（渲染无关的结构化数据） |
-| 目标渲染器 | Reveal.js + Chart.js + Mermaid |
-| 产物 | 标准 JSON，可 diff、可校验、可进版本库 |
+| 本地入口 | 原生 HTML + iframe |
+| 前端组件 | Vue 单文件组件（Options API）、Element 组件库、Tailwind 原子类 |
+| AIGC 提示词 | Markdown 结构化提示词（`appPrompt.md`） |
+| AI 服务 | transweb.cn serverless，流式返回 |
+| 幻灯片渲染 | Reveal.js |
+| 图表渲染 | Chart.js + Mermaid |
+| 数据格式 | JSON（`title` / `presenter` / `slides`） |
+| 结果存储 | transweb.cn 版本与历史记录 |
 
-本工具**不包含** Reveal.js 查看器本体，这是数据层工具的刻意边界，不是平台依赖。
+## 独立运行的边界
 
-## 目录结构
+| 可以 | 不可以 |
+| --- | --- |
+| 本地双击或静态托管 `appPage.html` | 完全离线生成（需要 transweb.cn） |
+| 不安装 Node.js、不构建、不部署后端 | 自带模型或本地模型直接推理 |
+| 浏览器内完成输入、放映、版本、导出 | 不依赖账号/额度无限调用 |
+| 把生成的演示文稿存档、分享、嵌入 | 直接修改 `appPrompt.md` 就让线上生效 |
 
-```text
-LeaferJS-presentation/
-├── appPrompt.md     # 工具引擎：完整系统提示词（必需）
-├── README.md        # 本文件
-├── appCode.vue      # 可选参考实现：平台端 UI（独立运行不需要）
-├── appPage.html     # 可选参考实现：iframe 嵌入页
-└── manifest.json    # 元数据
-```
-
-`run.mjs` 不在仓库内，按「快速开始」创建即可；`appCode.vue` 与 `appPage.html` 只是同款提示词在 transweb.cn 上的 Web 外壳，**不参与**独立运行链路，删掉它们不影响工具使用。
-
-## 完整示例
-
-```json
-{
-  "title": "AI 应用工厂",
-  "presenter": "Transweb",
-  "slides": [
-    {
-      "id": "cover",
-      "type": "title",
-      "title": "AI 应用工厂",
-      "elements": [
-        { "type": "text", "content": "把一句话变成可上线的应用" }
-      ]
-    },
-    {
-      "id": "market",
-      "type": "split",
-      "title": "市场增长",
-      "elements": [
-        { "type": "text", "content": "过去三年，AI 应用需求持续增长。" },
-        {
-          "type": "chart",
-          "content": "年度应用数量",
-          "chartType": "chartjs",
-          "chartData": {
-            "type": "bar",
-            "data": {
-              "labels": ["2024", "2025", "2026"],
-              "datasets": [
-                { "label": "应用数量", "data": [1200, 3800, 9600] }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": "workflow",
-      "type": "content",
-      "title": "Agent 工作流",
-      "elements": [
-        {
-          "type": "chart",
-          "content": "从需求到上线",
-          "chartType": "mermaid",
-          "chartData": {
-            "code": "flowchart LR\nUser --> Agent\nAgent --> LLM\nLLM --> App\nApp --> Deploy"
-          }
-        }
-      ]
-    },
-    {
-      "id": "summary",
-      "type": "summary",
-      "title": "总结",
-      "elements": [
-        {
-          "type": "list",
-          "content": ["一句话生成应用", "工作流可编排", "一键部署上线"]
-        }
-      ]
-    }
-  ]
-}
-```
-
-## 内容编排建议
-
-- **封面**：一句话点题，不堆副标题。
-- **内容页**：一页一个观点；能用列表就不用长段落。
-- **图文混排**：文字给结论，图表给证据；不要让图表解释文字。
-- **总结页**：3–5 条结论，可执行、可记忆。
-- **标题**：短、具体、有信息量；避免「背景介绍」「相关分析」这类空标题。
+如果要把 AI 能力迁到自己的基础设施，需要实现与 `aigcInterface` 兼容的流式接口，或把提示词接入自己的模型网关；这部分不在本仓库内。
 
 ## 交付验收清单
 
-- [ ] 输出是唯一一个合法 JSON，可直接 `JSON.parse`
-- [ ] 顶层只有 `title`、`presenter`、`slides`
+- [ ] 打开 `appPage.html` 能看到应用界面，而不是白屏
+- [ ] 输入主题后能看到流式生成状态
+- [ ] 生成结果能在网页中正常翻页
+- [ ] 输出是合法 JSON，可直接 `JSON.parse`
 - [ ] 每个 slide 的 `id` 唯一
 - [ ] `type` 只使用 `title` / `content` / `split` / `summary`
 - [ ] 每个 `chart` 都同时有 `chartType` 与 `chartData`
 - [ ] Chart.js 的 labels 与 datasets 长度一致
 - [ ] Mermaid `code` 换行正确、语法可渲染
-- [ ] 单段 ≤ 200 字、列表 ≤ 6 项、每项 ≤ 30 字
-- [ ] 图表页占比 20%–40%，不是每页都有图
+- [ ] 历史版本可切换，编辑后可生成新版本
 
 ## 常见问题
 
-**为什么不直接生成 PPTX？**
-JSON 更轻、更可控，也更容易换主题和渲染器。需要 PPTX 时，可以在 JSON 之上再加一层转换器，而不必重新生成内容。
+**打开 `appPage.html` 一直白屏或转圈？**
+先确认能访问 `https://transweb.cn`，再打开浏览器控制台看 iframe 是否被拦截。必要时改用本地静态服务（见「运行方式」），或直接访问在线应用地址。
 
-**必须联网吗？**
-生成阶段需要访问模型；查看阶段取决于你的渲染器。本地模型 + 本地查看器可完全离线。
+**需要安装 Node.js 或 npm 吗？**
+不需要。项目没有构建步骤；本地静态服务只是可选的更稳妥的打开方式。
 
-**输出被截断怎么办？**
-优先提高 `LLM_MAX_TOKENS`。长文稿可拆成多次生成再合并 `slides`，但要注意 `id` 唯一。
+**生成的是 PPT 文件吗？**
+不是。生成的是网页版演示文稿（JSON 驱动 Reveal.js 渲染），可在浏览器中直接放映；需要 PPTX 时，可在结果基础上再做一层转换。
 
-**可以商用吗？**
-本仓库暂未声明许可证。提示词与生成数据的版权归各自作者所有，商用前请自行确认授权范围。
+**可以离线使用吗？**
+不能离线生成。已生成的演示文稿可以在本地查看，但图表与放映依赖 Reveal.js、Chart.js、Mermaid 等前端资源。
 
-## 参考实现（可选）
+**能换成自己的模型吗？**
+可以，但需要替换 `aigcInterface` 适配层或自建兼容的 serverless 服务，并自行实现流式协议。仓库不包含这部分实现。
 
-- 在线效果参考：<https://transweb.cn/agent.html?id=ec6d0ef4ddfde4d983fdf934e57e29bb>
-- `appPage.html` 通过 iframe 嵌入同一在线版本；它只用于预览，不是运行本工具的必要条件。
+**为什么改了 `appPrompt.md` 线上没变化？**
+线上应用读取的是平台侧绑定的提示词配置；仓库里的文件是提示词契约与版本记录。要生效，需要在平台更新配置，或接入你自建的生成服务。
 
 ## 相关链接
 
+- 在线应用：<https://transweb.cn/agent.html?id=ec6d0ef4ddfde4d983fdf934e57e29bb>
+- 本地入口：[`appPage.html`](./appPage.html)
 - Reveal.js：<https://revealjs.com/>
 - Chart.js：<https://www.chartjs.org/>
 - Mermaid：<https://mermaid.js.org/>
@@ -420,4 +349,4 @@ JSON 更轻、更可控，也更容易换主题和渲染器。需要 PPTX 时，
 
 ## 许可
 
-本仓库暂未指定开源许可证。提示词文本与生成的演示文稿数据版权归各自作者所有；使用前请自行确认授权范围。
+本仓库暂未指定开源许可证。提示词文本、前端组件与生成代码版权归各自作者所有；使用前请自行确认授权范围。
